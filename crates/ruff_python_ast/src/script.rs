@@ -20,6 +20,12 @@ pub struct ScriptTag {
 }
 
 impl ScriptTag {
+    pub fn metadata(&self) -> &str {
+        self.metadata.as_str()
+    }
+}
+
+impl ScriptTag {
     /// Given the contents of a Python file, extract the `script` metadata block with leading
     /// comment hashes removed, any preceding shebang or content (prelude), and the remaining Python
     /// script.

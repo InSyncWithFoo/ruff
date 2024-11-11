@@ -1,7 +1,15 @@
+use super::super::block::Block;
+use super::super::{comments, format_imports};
+use crate::line_width::LineWidthBuilder;
+use crate::package::PackageRoot;
+use crate::settings::types::PythonVersion;
+use crate::settings::LinterSettings;
+use crate::Locator;
 use itertools::{EitherOrBoth, Itertools};
-
+use pep440_rs::VersionSpecifiers;
 use ruff_diagnostics::{Diagnostic, Edit, Fix, FixAvailability, Violation};
 use ruff_macros::{derive_message_formats, violation};
+use ruff_python_ast::script::ScriptTag;
 use ruff_python_ast::whitespace::trailing_lines_end;
 use ruff_python_ast::{PySourceType, Stmt};
 use ruff_python_codegen::Stylist;
@@ -10,13 +18,7 @@ use ruff_python_parser::Tokens;
 use ruff_python_trivia::{leading_indentation, textwrap::indent, PythonWhitespace};
 use ruff_source_file::{LineRanges, UniversalNewlines};
 use ruff_text_size::{Ranged, TextRange};
-
-use super::super::block::Block;
-use super::super::{comments, format_imports};
-use crate::line_width::LineWidthBuilder;
-use crate::package::PackageRoot;
-use crate::settings::LinterSettings;
-use crate::Locator;
+use serde::{Deserialize, Serialize};
 
 /// ## What it does
 /// De-duplicates, groups, and sorts imports based on the provided `isort` settings.
@@ -50,6 +52,12 @@ impl Violation for UnsortedImports {
     fn fix_title(&self) -> Option<String> {
         Some("Organize imports".to_string())
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ScriptMetadata {
+    #[serde(alias = "requires-python", alias = "requires_python")]
+    requires_python: Option<VersionSpecifiers>,
 }
 
 fn extract_range(body: &[&Stmt]) -> TextRange {
@@ -94,6 +102,14 @@ pub(crate) fn organize_imports(
 
     let range = extract_range(&block.imports);
 
+    // If this is a PEP 723 script, make sure to honor its `requires-python`, if any.
+    let script_target_version = ScriptTag::parse(locator.contents().as_bytes()).and_then(|tag| {
+        let metadata = toml::from_str::<ScriptMetadata>(tag.metadata()).ok()?;
+        let specifiers = metadata.requires_python?;
+
+        PythonVersion::get_minimum_supported_version(&specifiers)
+    });
+
     // Special-cases: there's leading or trailing content in the import block. These
     // are too hard to get right, and relatively rare, so flag but don't fix.
     if indexer.preceded_by_multi_statement_line(block.imports.first().unwrap(), locator.contents())
@@ -127,7 +143,7 @@ pub(crate) fn organize_imports(
         &settings.src,
         package,
         source_type,
-        settings.target_version,
+        script_target_version.unwrap_or(settings.target_version),
         &settings.isort,
         tokens,
     );
