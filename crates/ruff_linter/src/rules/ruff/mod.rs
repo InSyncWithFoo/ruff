@@ -388,6 +388,7 @@ mod tests {
 
     #[test_case(Rule::ZipInsteadOfPairwise, Path::new("RUF007.py"))]
     #[test_case(Rule::UnsafeMarkupUse, Path::new("RUF035.py"))]
+    #[test_case(Rule::NoneNotLastInUnion, Path::new("RUF036.py"))]
     fn preview_rules(rule_code: Rule, path: &Path) -> Result<()> {
         let snapshot = format!(
             "preview__{}_{}",

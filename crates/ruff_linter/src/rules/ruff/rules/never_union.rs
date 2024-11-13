@@ -170,7 +170,7 @@ pub(crate) fn never_union(checker: &mut Checker, expr: &Expr) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UnionLike {
+pub(crate) enum UnionLike {
     /// E.g., `typing.Union[int, str]`
     TypingUnion,
     /// E.g., `int | str`

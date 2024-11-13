@@ -1,0 +1,141 @@
+---
+source: crates/ruff_linter/src/rules/ruff/mod.rs
+snapshot_kind: text
+---
+RUF036.py:3:8: RUF036 [*] `None` is not the last member of a union
+  |
+1 | from typing import Union
+2 | 
+3 | front: None | A | B
+  |        ^^^^ RUF036
+4 | middle: A | None | B
+5 | back: A | B | None
+  |
+  = help: Move `None` to the back
+
+ℹ Unsafe fix
+1 1 | from typing import Union
+2 2 | 
+3   |-front: None | A | B
+  3 |+front: A | B | None
+4 4 | middle: A | None | B
+5 5 | back: A | B | None
+6 6 | 
+
+RUF036.py:4:13: RUF036 [*] `None` is not the last member of a union
+  |
+3 | front: None | A | B
+4 | middle: A | None | B
+  |             ^^^^ RUF036
+5 | back: A | B | None
+  |
+  = help: Move `None` to the back
+
+ℹ Unsafe fix
+1 1 | from typing import Union
+2 2 | 
+3 3 | front: None | A | B
+4   |-middle: A | None | B
+  4 |+middle: A | B | None
+5 5 | back: A | B | None
+6 6 | 
+7 7 | front_old: Union[None, A, B]
+
+RUF036.py:15:16: RUF036 [*] `None` is not the last member of a union
+   |
+13 | mixed_back: Union[A | B, C, None]
+14 | 
+15 | mixed_2_front: None | Union[A, B] | C
+   |                ^^^^ RUF036
+16 | mixed_2_middle: Union[A, B] | None | C
+17 | mixed_2_back: Union[A, B] | C | None
+   |
+   = help: Move `None` to the back
+
+ℹ Unsafe fix
+12 12 | mixed_middle: Union[A | B, None, C]
+13 13 | mixed_back: Union[A | B, C, None]
+14 14 | 
+15    |-mixed_2_front: None | Union[A, B] | C
+   15 |+mixed_2_front: A | B | C | None
+16 16 | mixed_2_middle: Union[A, B] | None | C
+17 17 | mixed_2_back: Union[A, B] | C | None
+18 18 | 
+
+RUF036.py:16:31: RUF036 [*] `None` is not the last member of a union
+   |
+15 | mixed_2_front: None | Union[A, B] | C
+16 | mixed_2_middle: Union[A, B] | None | C
+   |                               ^^^^ RUF036
+17 | mixed_2_back: Union[A, B] | C | None
+   |
+   = help: Move `None` to the back
+
+ℹ Unsafe fix
+13 13 | mixed_back: Union[A | B, C, None]
+14 14 | 
+15 15 | mixed_2_front: None | Union[A, B] | C
+16    |-mixed_2_middle: Union[A, B] | None | C
+   16 |+mixed_2_middle: A | B | C | None
+17 17 | mixed_2_back: Union[A, B] | C | None
+18 18 | 
+19 19 | complex_1_front: None | tuple[None, int] | Callable[[], None]
+
+RUF036.py:19:18: RUF036 [*] `None` is not the last member of a union
+   |
+17 | mixed_2_back: Union[A, B] | C | None
+18 | 
+19 | complex_1_front: None | tuple[None, int] | Callable[[], None]
+   |                  ^^^^ RUF036
+20 | complex_1_middle: tuple[None, int] | None | Callable[[], None]
+21 | complex_1_back: tuple[None, int] | Callable[[], None] | None
+   |
+   = help: Move `None` to the back
+
+ℹ Unsafe fix
+16 16 | mixed_2_middle: Union[A, B] | None | C
+17 17 | mixed_2_back: Union[A, B] | C | None
+18 18 | 
+19    |-complex_1_front: None | tuple[None, int] | Callable[[], None]
+   19 |+complex_1_front: tuple[None, int] | Callable[[], None] | None
+20 20 | complex_1_middle: tuple[None, int] | None | Callable[[], None]
+21 21 | complex_1_back: tuple[None, int] | Callable[[], None] | None
+22 22 | 
+
+RUF036.py:20:38: RUF036 [*] `None` is not the last member of a union
+   |
+19 | complex_1_front: None | tuple[None, int] | Callable[[], None]
+20 | complex_1_middle: tuple[None, int] | None | Callable[[], None]
+   |                                      ^^^^ RUF036
+21 | complex_1_back: tuple[None, int] | Callable[[], None] | None
+   |
+   = help: Move `None` to the back
+
+ℹ Unsafe fix
+17 17 | mixed_2_back: Union[A, B] | C | None
+18 18 | 
+19 19 | complex_1_front: None | tuple[None, int] | Callable[[], None]
+20    |-complex_1_middle: tuple[None, int] | None | Callable[[], None]
+   20 |+complex_1_middle: tuple[None, int] | Callable[[], None] | None
+21 21 | complex_1_back: tuple[None, int] | Callable[[], None] | None
+22 22 | 
+23 23 | complex_1_front: Union[None, tuple[None, None], Callable[[], None]]
+
+RUF036.py:28:21: RUF036 [*] `None` is not the last member of a union
+   |
+27 | # None | int | str | bytes | None | None | dict[None, list[None]]
+28 | nested: Union[Union[None, int], str | Union[bytes, None] | Union[Union[None]]] | dict[None, list[None]]
+   |                     ^^^^ RUF036
+29 | 
+30 | empty: None | Union[()]
+   |
+   = help: Move `None` to the back
+
+ℹ Unsafe fix
+25 25 | complex_1_back: Union[tuple[None, None], Callable[[], None], None]
+26 26 | 
+27 27 | # None | int | str | bytes | None | None | dict[None, list[None]]
+28    |-nested: Union[Union[None, int], str | Union[bytes, None] | Union[Union[None]]] | dict[None, list[None]]
+   28 |+nested: int | str | bytes | None | dict[None, list[None]] | None
+29 29 | 
+30 30 | empty: None | Union[()]
