@@ -55,9 +55,9 @@ use crate::types::{
     bindings_ty, builtins_symbol, declarations_ty, global_symbol, symbol, todo_type,
     typing_extensions_symbol, Boundness, Class, ClassLiteralType, FunctionType, InstanceType,
     IntersectionBuilder, IntersectionType, IterationOutcome, KnownClass, KnownFunction,
-    KnownInstanceType, MetaclassCandidate, MetaclassErrorKind, SliceLiteralType, Symbol,
-    Truthiness, TupleType, Type, TypeAliasType, TypeArrayDisplay, TypeVarBoundOrConstraints,
-    TypeVarInstance, UnionBuilder, UnionType,
+    KnownInstanceType, MetaclassCandidate, MetaclassErrorKind, SliceLiteralType, SubclassOfType,
+    Symbol, Truthiness, TupleType, Type, TypeAliasType, TypeArrayDisplay,
+    TypeVarBoundOrConstraints, TypeVarInstance, UnionBuilder, UnionType,
 };
 use crate::unpack::Unpack;
 use crate::util::subscript::{PyIndex, PySlice};
@@ -4657,10 +4657,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         match slice {
             ast::Expr::Name(_) | ast::Expr::Attribute(_) => {
                 let name_ty = self.infer_expression(slice);
-                if let Some(ClassLiteralType { class }) = name_ty.into_class_literal() {
-                    Type::subclass_of(class)
-                } else {
-                    todo_type!("unsupported type[X] special form")
+
+                match name_ty {
+                    Type::KnownInstance(KnownInstanceType::Any) => {
+                        Type::SubclassOf(SubclassOfType::Any)
+                    }
+                    Type::ClassLiteral(ClassLiteralType { class }) => Type::subclass_of(class),
+                    _ => todo_type!("unsupported type[X] special form"),
                 }
             }
             ast::Expr::BinOp(binary) if binary.op == ast::Operator::BitOr => {

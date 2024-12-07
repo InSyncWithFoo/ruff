@@ -572,7 +572,7 @@ impl<'db> Type<'db> {
     }
 
     pub const fn subclass_of(class: Class<'db>) -> Self {
-        Self::SubclassOf(SubclassOfType { class })
+        Self::SubclassOf(SubclassOfType::Class(class))
     }
 
     pub fn string_literal(db: &'db dyn Db, string: &str) -> Self {
@@ -666,14 +666,16 @@ impl<'db> Type<'db> {
             {
                 true
             }
-            (Type::ClassLiteral(self_class), Type::SubclassOf(target_class)) => {
-                self_class.class.is_subclass_of(db, target_class.class)
-            }
-            (Type::SubclassOf(self_class), Type::SubclassOf(target_class)) => {
-                self_class.class.is_subclass_of(db, target_class.class)
-            }
             (
-                Type::SubclassOf(SubclassOfType { class: self_class }),
+                Type::ClassLiteral(self_class),
+                Type::SubclassOf(SubclassOfType::Class(target_class)),
+            ) => self_class.class.is_subclass_of(db, target_class),
+            (
+                Type::SubclassOf(SubclassOfType::Class(self_class)),
+                Type::SubclassOf(SubclassOfType::Class(target_class)),
+            ) => self_class.is_subclass_of(db, target_class),
+            (
+                Type::SubclassOf(SubclassOfType::Class(self_class)),
                 Type::Instance(InstanceType {
                     class: target_class,
                 }),
@@ -752,6 +754,30 @@ impl<'db> Type<'db> {
         match (self, target) {
             (Type::Unknown | Type::Any | Type::Todo(_), _) => true,
             (_, Type::Unknown | Type::Any | Type::Todo(_)) => true,
+            (
+                Type::SubclassOf(SubclassOfType::Any)
+                | Type::SubclassOf(SubclassOfType::Unknown)
+                | Type::SubclassOf(SubclassOfType::Todo),
+                Type::SubclassOf(_) | Type::ClassLiteral(_),
+            ) => true,
+            (
+                Type::SubclassOf(_) | Type::ClassLiteral(_),
+                Type::SubclassOf(SubclassOfType::Any)
+                | Type::SubclassOf(SubclassOfType::Unknown)
+                | Type::SubclassOf(SubclassOfType::Todo),
+            ) => true,
+            (
+                Type::SubclassOf(SubclassOfType::Any)
+                | Type::SubclassOf(SubclassOfType::Unknown)
+                | Type::SubclassOf(SubclassOfType::Todo),
+                Type::Instance(InstanceType { class }),
+            )
+            | (
+                Type::Instance(InstanceType { class }),
+                Type::SubclassOf(SubclassOfType::Any)
+                | Type::SubclassOf(SubclassOfType::Unknown)
+                | Type::SubclassOf(SubclassOfType::Todo),
+            ) => class.is_known(db, KnownClass::Type),
             (Type::Union(union), ty) => union
                 .elements(db)
                 .iter()
@@ -870,10 +896,14 @@ impl<'db> Type<'db> {
                 | Type::ClassLiteral(..)),
             ) => left != right,
 
-            (Type::SubclassOf(type_class), Type::ClassLiteral(class_literal))
-            | (Type::ClassLiteral(class_literal), Type::SubclassOf(type_class)) => {
-                !class_literal.class.is_subclass_of(db, type_class.class)
-            }
+            (
+                Type::SubclassOf(SubclassOfType::Class(type_class)),
+                Type::ClassLiteral(class_literal),
+            )
+            | (
+                Type::ClassLiteral(class_literal),
+                Type::SubclassOf(SubclassOfType::Class(type_class)),
+            ) => !class_literal.class.is_subclass_of(db, type_class),
             (Type::SubclassOf(_), Type::SubclassOf(_)) => false,
             (Type::SubclassOf(_), Type::Instance(_)) | (Type::Instance(_), Type::SubclassOf(_)) => {
                 false
@@ -1039,6 +1069,9 @@ impl<'db> Type<'db> {
             | Type::BytesLiteral(_)
             | Type::SliceLiteral(_)
             | Type::KnownInstance(_) => true,
+            Type::SubclassOf(SubclassOfType::Any) => false,
+            Type::SubclassOf(SubclassOfType::Unknown) => false,
+            Type::SubclassOf(SubclassOfType::Todo) => false,
             Type::ClassLiteral(_) | Type::SubclassOf(_) | Type::Instance(_) => {
                 // TODO: Ideally, we would iterate over the MRO of the class, check if all
                 // bases are fully static, and only return `true` if that is the case.
@@ -1662,7 +1695,10 @@ impl<'db> Type<'db> {
             Type::Unknown => Type::Unknown,
             Type::Never => Type::Never,
             Type::ClassLiteral(ClassLiteralType { class }) => Type::instance(*class),
-            Type::SubclassOf(SubclassOfType { class }) => Type::instance(*class),
+            Type::SubclassOf(SubclassOfType::Class(class)) => Type::instance(*class),
+            Type::SubclassOf(SubclassOfType::Any) => Type::Any,
+            Type::SubclassOf(SubclassOfType::Unknown) => Type::Unknown,
+            Type::SubclassOf(SubclassOfType::Todo) => todo_type!(),
             Type::Union(union) => union.map(db, |element| element.to_instance(db)),
             // TODO: we can probably do better here: --Alex
             Type::Intersection(_) => todo_type!(),
@@ -1751,7 +1787,7 @@ impl<'db> Type<'db> {
         match self {
             Type::Never => Type::Never,
             Type::Instance(InstanceType { class }) => {
-                Type::SubclassOf(SubclassOfType { class: *class })
+                Type::SubclassOf(SubclassOfType::Class(*class))
             }
             Type::KnownInstance(known_instance) => known_instance.class().to_class_literal(db),
             Type::Union(union) => union.map(db, |ty| ty.to_meta_type(db)),
@@ -1763,7 +1799,7 @@ impl<'db> Type<'db> {
             Type::ModuleLiteral(_) => KnownClass::ModuleType.to_class_literal(db),
             Type::Tuple(_) => KnownClass::Tuple.to_class_literal(db),
             Type::ClassLiteral(ClassLiteralType { class }) => class.metaclass(db),
-            Type::SubclassOf(SubclassOfType { class }) => Type::subclass_of(
+            Type::SubclassOf(SubclassOfType::Class(class)) => Type::subclass_of(
                 class
                     .try_metaclass(db)
                     .ok()
@@ -1771,6 +1807,9 @@ impl<'db> Type<'db> {
                     .unwrap_or_else(|| KnownClass::Type.to_class_literal(db).expect_class_literal())
                     .class,
             ),
+            Type::SubclassOf(SubclassOfType::Any) => Type::SubclassOf(SubclassOfType::Any),
+            Type::SubclassOf(SubclassOfType::Todo) => Type::SubclassOf(SubclassOfType::Todo),
+            Type::SubclassOf(SubclassOfType::Unknown) => Type::SubclassOf(SubclassOfType::Unknown),
             Type::StringLiteral(_) | Type::LiteralString => KnownClass::Str.to_class_literal(db),
             // TODO: `type[Any]`?
             Type::Any => Type::Any,
@@ -3032,13 +3071,33 @@ impl<'db> From<ClassLiteralType<'db>> for Type<'db> {
 
 /// A type that represents `type[C]`, i.e. the class literal `C` and class literals that are subclasses of `C`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Update)]
-pub struct SubclassOfType<'db> {
-    class: Class<'db>,
+pub enum SubclassOfType<'db> {
+    Any,
+    Unknown,
+    Todo,
+    Class(Class<'db>),
 }
 
 impl<'db> SubclassOfType<'db> {
     fn member(self, db: &'db dyn Db, name: &str) -> Symbol<'db> {
-        self.class.class_member(db, name)
+        if let SubclassOfType::Class(class) = self {
+            return class.class_member(db, name);
+        }
+
+        let builtins_type = KnownClass::Type.to_class_literal(db);
+        let member = builtins_type.member(db, name);
+
+        let fallback_type = match self {
+            SubclassOfType::Any => Type::Any,
+            SubclassOfType::Unknown => Type::Unknown,
+            SubclassOfType::Todo => todo_type!(),
+            _ => unreachable!(),
+        };
+
+        match member {
+            Symbol::Type(..) => member,
+            Symbol::Unbound => Symbol::Type(fallback_type, Boundness::Bound),
+        }
     }
 }
 

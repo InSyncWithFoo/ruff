@@ -83,8 +83,17 @@ impl Display for DisplayRepresentation<'_> {
             }
             // TODO functions and classes should display using a fully qualified name
             Type::ClassLiteral(ClassLiteralType { class }) => f.write_str(class.name(self.db)),
-            Type::SubclassOf(SubclassOfType { class }) => {
+            Type::SubclassOf(SubclassOfType::Class(class)) => {
                 write!(f, "type[{}]", class.name(self.db))
+            }
+            Type::SubclassOf(SubclassOfType::Any) => {
+                write!(f, "type[Any]")
+            }
+            Type::SubclassOf(SubclassOfType::Unknown) => {
+                write!(f, "type[Unknown]")
+            }
+            Type::SubclassOf(SubclassOfType::Todo) => {
+                write!(f, "type[@Todo]")
             }
             Type::KnownInstance(known_instance) => f.write_str(known_instance.repr(self.db)),
             Type::FunctionLiteral(function) => f.write_str(function.name(self.db)),
