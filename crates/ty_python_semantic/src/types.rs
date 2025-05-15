@@ -39,7 +39,8 @@ use crate::semantic_index::symbol::ScopeId;
 use crate::semantic_index::{imported_modules, semantic_index};
 use crate::suppression::check_suppressions;
 use crate::symbol::{
-    imported_symbol, symbol_from_bindings, Boundness, Symbol, SymbolAndQualifiers,
+    imported_symbol, module_type_implicit_global_symbol, symbol_from_bindings, Boundness, Symbol,
+    SymbolAndQualifiers,
 };
 use crate::types::call::{Bindings, CallArgumentTypes, CallableBinding};
 pub(crate) use crate::types::class_base::ClassBase;
@@ -3032,6 +3033,9 @@ impl<'db> Type<'db> {
                 Symbol::bound(Type::IntLiteral(i64::from(bool_value))).into()
             }
 
+            Type::ModuleLiteral(module) if name == "__builtins__" => {
+                module_type_implicit_global_symbol(db, module.module(db).file(), name_str)
+            }
             Type::ModuleLiteral(module) => module.static_member(db, name_str).into(),
 
             Type::AlwaysFalsy | Type::AlwaysTruthy => {

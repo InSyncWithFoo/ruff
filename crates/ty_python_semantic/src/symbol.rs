@@ -283,7 +283,7 @@ pub(crate) fn global_symbol<'db>(
     name: &str,
 ) -> SymbolAndQualifiers<'db> {
     explicit_global_symbol(db, file, name)
-        .or_fall_back_to(db, || module_type_implicit_global_symbol(db, name))
+        .or_fall_back_to(db, || module_type_implicit_global_symbol(db, file, name))
 }
 
 /// Infers the public type of an imported symbol.
@@ -351,7 +351,7 @@ pub(crate) fn builtins_symbol<'db>(db: &'db dyn Db, symbol: &str) -> SymbolAndQu
                 // We're looking up in the builtins namespace and not the module, so we should
                 // do the normal lookup in `types.ModuleType` and not the special one as in
                 // `imported_symbol`.
-                module_type_implicit_global_symbol(db, symbol)
+                module_type_implicit_global_symbol(db, module.file(), symbol)
             })
         })
         .unwrap_or_default()
@@ -956,12 +956,14 @@ fn is_reexported(db: &dyn Db, definition: Definition<'_>) -> bool {
 }
 
 mod implicit_globals {
+    use ruff_db::files::File;
     use ruff_python_ast as ast;
 
     use crate::db::Db;
     use crate::semantic_index::{self, symbol_table, use_def_map};
     use crate::symbol::SymbolAndQualifiers;
     use crate::types::{KnownClass, Type};
+    use crate::{resolve_module, KnownModule};
 
     use super::{symbol_from_declarations, Symbol, SymbolFromDeclarationsResult};
 
@@ -1006,6 +1008,7 @@ mod implicit_globals {
     /// global scope if they're being imported **from a different file**.
     pub(crate) fn module_type_implicit_global_symbol<'db>(
         db: &'db dyn Db,
+        importing_file: File,
         name: &str,
     ) -> SymbolAndQualifiers<'db> {
         // We special-case `__file__` here because we know that for an internal implicit global
@@ -1013,6 +1016,14 @@ mod implicit_globals {
         // None`.
         if name == "__file__" {
             Symbol::bound(KnownClass::Str.to_instance(db)).into()
+        }
+        // The implicit attribute `__builtins__` of all modules
+        // points to the `builtins` stdlib module.
+        else if name == "__builtins__" {
+            let module = resolve_module(db, &KnownModule::Builtins.name())
+                .expect("`builtins` to be available");
+
+            Symbol::bound(Type::module_literal(db, importing_file, module)).into()
         }
         // In general we wouldn't check to see whether a symbol exists on a class before doing the
         // `.member()` call on the instance type -- we'd just do the `.member`() call on the instance
